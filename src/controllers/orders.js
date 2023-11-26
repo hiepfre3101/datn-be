@@ -7,6 +7,7 @@ import { transporter } from "../config/mail";
 import { handleTransaction } from "./momo-pay";
 import { statusOrder } from "../config/constants";
 import Carts from "../models/carts";
+import { vnpayCreate } from "./vnpay";
 const checkCancellationTime = (order) => {
   const checkTime = new Date(order.createdAt);
   const currentTime = new Date();
@@ -136,14 +137,13 @@ export const CreateOrder = async (req, res) => {
           message: "Invalid data!",
         });
       } else {
-        // if (item.originId !== prd.originId) {
-        //   console.log(item.originId, prd.originId);
+        // if (!new mongoose.Types.ObjectId(item.originId._id).equals(prd.originId)) {
         //   errors.push({
         //     productId: item.productId,
         //     originId: item.originId,
-        //     message: "Invalid Product Origin!",
+        //     message: 'Invalid Product Origin!'
         //   });
-        // }
+
         if (item.price != prd.price) {
           errors.push({
             productId: item.productId,
@@ -194,6 +194,11 @@ export const CreateOrder = async (req, res) => {
     const totalPayment = products.reduce((accumulator, product) => {
       return accumulator + product.price * product.weight;
     }, 0);
+
+    // kiểm tra phương thức thanh toán là momo
+    if (paymentMethod === "vnpay") {
+      await vnpayCreate(req, res);
+    }
 
     if (req.body.totalPayment !== totalPayment) {
       return res.status(400).json({
@@ -294,8 +299,6 @@ export const CreateOrder = async (req, res) => {
       );
     }
     const data = await Order.create(req.body);
-
-    // kiểm tra phương thức thanh toán là momo
 
     await sendMailer(req.body.email, data);
     return res.status(201).json({
@@ -573,11 +576,17 @@ export const CanceledOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
     const order = await Order.findById(orderId);
+    if (order.status == "đã hủy đơn hàng") {
+      return res.status(401).json({
+        status: 401,
+        message: "The previous order has been cancelled",
+      });
+    }
     const { canCancel } = checkCancellationTime(order);
     if (canCancel) {
       const data = await Order.findByIdAndUpdate(
         orderId,
-        { status: "đã hủy" },
+        { status: "đã hủy đơn hàng" },
         { new: true }
       );
       if (!data) {
@@ -585,6 +594,33 @@ export const CanceledOrder = async (req, res) => {
           status: 400,
           message: "Cancel failed",
         });
+      }
+
+      for (let item of order.products) {
+        const product = await Product.findById(item.productId);
+        for (let shipment of product.shipments) {
+          // Trả lại cân ở bảng products
+          await Product.findOneAndUpdate(
+            { _id: product._id, "shipments.idShipment": shipment.idShipment },
+            {
+              $set: {
+                "shipments.$.weight": shipment.weight + item.weight,
+              },
+            },
+            { new: true }
+          );
+
+          //Bảng shipment
+          await Shipment.findOneAndUpdate(
+            { _id: shipment.idShipment, "products.idProduct": product._id },
+            {
+              $set: {
+                "products.$.weight": shipment.weight + item.weight,
+              },
+            },
+            { new: true }
+          );
+        }
       }
       return res.status(201).json({
         body: { data },
@@ -669,6 +705,8 @@ export const UpdateOrder = async (req, res) => {
         new: true,
       }
     );
+
+    sendMailer(data.email, data);
     return res.status(201).json({
       body: { data },
       status: 201,
