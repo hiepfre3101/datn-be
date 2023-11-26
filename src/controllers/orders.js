@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import Order from "../models/orders";
 import Product from "../models/products";
 import Shipment from "../models/shipment";
-import { validateCheckout } from "../validation/checkout";
+import { validateCheckout } from "../validation/order";
 import { transporter } from "../config/mail";
 import { handleTransaction } from "./momo-pay";
 import { statusOrder } from "../config/constants";
@@ -24,14 +24,13 @@ const checkCancellationTime = (order) => {
 const formatDateTime = (dateTime) => {
   const date = new Date(dateTime);
 
-  const formattedDate = `${date.getDate()}/${date.getMonth() + 1
-    }/${date.getFullYear()}`;
+  const formattedDate = `${date.getDate()}/${
+    date.getMonth() + 1
+  }/${date.getFullYear()}`;
   const formattedTime = `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
   return `${formattedDate} ${formattedTime}`;
 };
 const sendMailer = async (email, data) => {
-
-
   // console.log(email,data);
   await transporter.sendMail({
     from: "namphpmailer@gmail.com",
@@ -41,10 +40,13 @@ const sendMailer = async (email, data) => {
                   <a target="_blank" href="http:localhost:5173">
                     <img src="https://spacingtech.com/html/tm/freozy/freezy-ltr/image/logo/logo.png" style="width:80px;color:#000"/>
                   </a>
-                  <p style="color:#2986cc;">Kính gửi Anh/chị: ${data.customerName
-      } </p> 
+                  <p style="color:#2986cc;">Kính gửi Anh/chị: ${
+                    data.customerName
+                  } </p> 
                   <p>Cảm ơn Anh/chị đã mua hàng tại FRESH MART. Chúng tôi cảm thấy may mắn khi được phục vụ Anh/chị. Sau đây là hóa đơn chi tiết về đơn hàng</p>
-                  <p style="font-weight:bold">Hóa đơn được tạo lúc: ${formatDateTime(data.createdAt)}</p>
+                  <p style="font-weight:bold">Hóa đơn được tạo lúc: ${formatDateTime(
+                    data.createdAt
+                  )}</p>
                   <div style="border:1px solid #ccc;border-radius:10px; padding:10px 20px;width: max-content">
                   <p>Mã hóa đơn: ${data.invoiceId}</p>
                   <p>Khách hàng: ${data.customerName}</p>
@@ -61,33 +63,35 @@ const sendMailer = async (email, data) => {
                   </thead>
                   <tbody>
                     ${data.products
-        .map((product, index) =>
-          `
+                      .map(
+                        (product, index) =>
+                          `
           <tr style="border-bottom:1px solid #ccc">
             <td style="padding: 10px;">${index + 1}</td>
-            <td style="padding: 10px;"><img alt="image" src="${product.images
-          }" style="width: 90px; height: 90px;border-radius:5px">
+            <td style="padding: 10px;"><img alt="image" src="${
+              product.images
+            }" style="width: 90px; height: 90px;border-radius:5px">
             <p>${product.productName}</p>
             </td>
             <td style="padding: 10px;">${product.weight}kg</td>
             <td style="padding: 10px;">${product.price.toLocaleString(
-            "vi-VN"
-          )}VNĐ</td>
+              "vi-VN"
+            )}VNĐ</td>
           </tr>
        `
+                      )
 
-        )
-
-        .join("")}
+                      .join("")}
                   </tbody>
                 </table>  
                   <p style="color: red;font-weight:bold;margin-top:20px">Tổng tiền thanh toán: ${data.totalPayment.toLocaleString(
-          "vi-VN"
-        )}VNĐ</p>
-                  <p>Thanh toán: ${data.pay == false
-        ? "Thanh toán khi nhận hàng"
-        : "Đã thanh toán online"
-      }</p>
+                    "vi-VN"
+                  )}VNĐ</p>
+                  <p>Thanh toán: ${
+                    data.pay == false
+                      ? "Thanh toán khi nhận hàng"
+                      : "Đã thanh toán online"
+                  }</p>
                   <p>Trạng thái đơn hàng: ${data.status}</p>
                   </div>
                    <p>Xin cảm ơn quý khách!</p>
@@ -98,7 +102,6 @@ const sendMailer = async (email, data) => {
 //Tạo mới đơn hàng
 export const CreateOrder = async (req, res) => {
   try {
-
     const { products, paymentMethod } = req.body;
     const { error } = validateCheckout.validate(req.body, {
       abortEarly: false,
@@ -123,7 +126,7 @@ export const CreateOrder = async (req, res) => {
         errors.push({
           productId: item.productId,
           weight: item.weight,
-          message: 'Invalid Product Weight!'
+          message: "Invalid Product Weight!",
         });
       }
       const prd = await Product.findById(item.productId);
@@ -133,36 +136,39 @@ export const CreateOrder = async (req, res) => {
           message: "Invalid data!",
         });
       } else {
-        if (!new mongoose.Types.ObjectId(item.originId._id).equals(prd.originId)) {
-          errors.push({
-            productId: item.productId,
-            originId: item.originId,
-            message: 'Invalid Product Origin!'
-          });
-        }
+        // if (item.originId !== prd.originId) {
+        //   console.log(item.originId, prd.originId);
+        //   errors.push({
+        //     productId: item.productId,
+        //     originId: item.originId,
+        //     message: "Invalid Product Origin!",
+        //   });
+        // }
         if (item.price != prd.price) {
           errors.push({
             productId: item.productId,
             price: item.price,
-            message: 'Invalid Product Price!'
+            message: "Invalid Product Price!",
           });
         }
         if (item.productName != prd.productName) {
           errors.unshift({
             productId: item.productId,
             productName: item.productName,
-            message: 'Invalid Product Name!'
+            message: "Invalid Product Name!",
           });
         }
         if (item.images != prd.images[0].url) {
           errors.push({
             productId: item.productId,
             images: item.images,
-            message: 'Invalid Product Image!'
+            message: "Invalid Product Image!",
           });
         }
         const currentTotalWeight = prd.shipments.reduce(
-          (accumulator, shipment) => accumulator + shipment.weight, 0);
+          (accumulator, shipment) => accumulator + shipment.weight,
+          0
+        );
         if (prd.shipments.length === 0) {
           errors.push({
             productId: item.productId,
@@ -176,7 +182,6 @@ export const CreateOrder = async (req, res) => {
             maxWeight: currentTotalWeight,
           });
         }
-
       }
     }
     if (errors.length > 0) {
@@ -187,20 +192,37 @@ export const CreateOrder = async (req, res) => {
       });
     }
     const totalPayment = products.reduce((accumulator, product) => {
-      return accumulator + (product.price * product.weight)
-    }, 0)
+      return accumulator + product.price * product.weight;
+    }, 0);
+
     if (req.body.totalPayment !== totalPayment) {
       return res.status(400).json({
         status: 400,
         message: "Invalid totalPayment!",
         true: totalPayment,
-        false: req.body.totalPayment
+        false: req.body.totalPayment,
       });
     }
-
-
+    //vnpay
+    if (paymentMethod === "vnpay") {
+    }
+    // momo
+    if (paymentMethod === "momo") {
+      try {
+        const resMOMO = await handleTransaction({
+          amount: totalPayment,
+          extraData: "email",
+        });
+        console.log(5, resMOMO);
+        return;
+      } catch (error) {
+        return res.status(400).json({
+          message: "Error when use momo",
+          error,
+        });
+      }
+    }
     for (let item of products) {
-
       const prd = await Product.findById(item.productId);
       let itemWeight = item.weight;
       if (itemWeight != 0 || currentTotalWeight != 0) {
@@ -211,7 +233,7 @@ export const CreateOrder = async (req, res) => {
           //TH1: Nếu số lượng mua lớn hơn só lượng trong lô hàng hiện tại
           if (shipment.weight - itemWeight <= 0) {
             if (prd.isSale) {
-              await Product.findByIdAndDelete(prd._id)
+              await Product.findByIdAndDelete(prd._id);
             } else {
               // xóa lô hàng hiện tại trong record của sản phẩm hiện tại
               await Product.findOneAndUpdate(
@@ -261,20 +283,20 @@ export const CreateOrder = async (req, res) => {
       }
     }
 
-
     // console.log(req.user);
     if (req.user != null) {
       req.body["userId"] = req.user._id;
-      await Carts.findOneAndUpdate({ userId: req.user._id }, {
-        products: []
-      })
+      await Carts.findOneAndUpdate(
+        { userId: req.user._id },
+        {
+          products: [],
+        }
+      );
     }
     const data = await Order.create(req.body);
 
     // kiểm tra phương thức thanh toán là momo
-    if (paymentMethod === "vnpay") {
 
-    }
     await sendMailer(req.body.email, data);
     return res.status(201).json({
       status: 201,
@@ -395,7 +417,7 @@ export const OrdersForMember = async (req, res) => {
   const { _status = "", _day } = req.query;
   try {
     const userId = req.user._id;
-    let data = await Order.find({ userId }).sort({createdAt:-1});
+    let data = await Order.find({ userId }).sort({ createdAt: -1 });
     if (data.length == 0) {
       return res.status(200).json({
         status: 200,
@@ -474,7 +496,7 @@ export const FilterOrdersForMember = async (req, res) => {
     const userId = req.user._id;
     const { _day, _status, invoiceId } = req.query;
     // console.log(req.query);
-    let data = await Order.find({ userId }).sort({createdAt:-1});
+    let data = await Order.find({ userId }).sort({ createdAt: -1 });
 
     //lọc theo trạng thái đơn hàng
     if (_status) {
